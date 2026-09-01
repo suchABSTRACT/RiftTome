@@ -100,9 +100,11 @@ async function lookupCard(rawQuery) {
     `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(fullQuery)}`,
   ];
 
-  for (const url of queries) {
-    // Try each URL up to 2 times with a short delay on failure
-    for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let i = 0; i < queries.length; i++) {
+    const url = queries[i];
+    if (i > 0) await new Promise(r => setTimeout(r, 1000)); // brief pause between queries
+    // Try each URL up to 3 times with increasing delays on failure
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`[lookup] GET ${url} (attempt ${attempt})`);
         const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
@@ -110,8 +112,9 @@ async function lookupCard(rawQuery) {
 
         // Detect HTML error page
         if (text.trim().startsWith("<")) {
-          console.log(`[lookup] Got HTML instead of JSON, retrying...`);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+          const delay = attempt * 2000;
+          console.log(`[lookup] Got HTML instead of JSON, retrying in ${delay}ms...`);
+          if (attempt < 3) await new Promise(r => setTimeout(r, delay));
           continue;
         }
 
@@ -150,7 +153,7 @@ async function lookupCard(rawQuery) {
         break;
       } catch (err) {
         console.error(`[lookup] Error (attempt ${attempt}): ${err.message}`);
-        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 2000));
       }
     }
   }
