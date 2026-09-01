@@ -103,18 +103,17 @@ async function lookupCard(rawQuery) {
   for (let i = 0; i < queries.length; i++) {
     const url = queries[i];
     if (i > 0) await new Promise(r => setTimeout(r, 1000)); // brief pause between queries
-    // Try each URL up to 3 times with increasing delays on failure
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    // Try each URL up to 2 times - first attempt, then one retry after a longer delay
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         console.log(`[lookup] GET ${url} (attempt ${attempt})`);
         const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
         const text = await res.text();
 
-        // Detect HTML error page
+        // Detect HTML error page (rate limit or server error)
         if (text.trim().startsWith("<")) {
-          const delay = attempt * 2000;
-          console.log(`[lookup] Got HTML instead of JSON, retrying in ${delay}ms...`);
-          if (attempt < 3) await new Promise(r => setTimeout(r, delay));
+          console.log(`[lookup] Rate limited or server error, waiting 5s...`);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 5000));
           continue;
         }
 
@@ -153,7 +152,7 @@ async function lookupCard(rawQuery) {
         break;
       } catch (err) {
         console.error(`[lookup] Error (attempt ${attempt}): ${err.message}`);
-        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 2000));
+        if (attempt < 2) await new Promise(r => setTimeout(r, 5000));
       }
     }
   }
