@@ -101,43 +101,57 @@ async function lookupCard(rawQuery) {
   ];
 
   for (const url of queries) {
-    try {
-      console.log(`[lookup] GET ${url}`);
-      const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
-      const json = await res.json();
-      console.log(`[lookup] Response: ${JSON.stringify(json).slice(0, 300)}`);
-      const cards = json.items ?? json.data ?? (Array.isArray(json) ? json : null);
-      if (!cards || cards.length === 0) continue;
+    // Try each URL up to 2 times with a short delay on failure
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(`[lookup] GET ${url} (attempt ${attempt})`);
+        const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
+        const text = await res.text();
 
-      // Filter by domain if a colour was specified
-      const pool = domain
-        ? cards.filter(c => (c.classification?.domain ?? []).includes(domain))
-        : cards;
+        // Detect HTML error page
+        if (text.trim().startsWith("<")) {
+          console.log(`[lookup] Got HTML instead of JSON, retrying...`);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
 
-      if (domain && pool.length === 0) {
-        console.log(`[lookup] No cards in domain "${domain}" among ${cards.length} results`);
-        continue;
+        const json = JSON.parse(text);
+        console.log(`[lookup] Response: ${JSON.stringify(json).slice(0, 300)}`);
+        const cards = json.items ?? json.data ?? (Array.isArray(json) ? json : null);
+        if (!cards || cards.length === 0) break; // No results, try next URL
+
+        // Filter by domain if a colour was specified
+        const pool = domain
+          ? cards.filter(c => (c.classification?.domain ?? []).includes(domain))
+          : cards;
+
+        if (domain && pool.length === 0) {
+          console.log(`[lookup] No cards in domain "${domain}" among ${cards.length} results`);
+          break;
+        }
+
+        const searchPool = pool.length > 0 ? pool : cards;
+
+        // Exact name match first
+        const exact = searchPool.find(c => c.name?.toLowerCase() === name.toLowerCase());
+        if (exact) { console.log(`[lookup] Exact: "${exact.name}"`); return exact; }
+
+        // Similarity match
+        const similar = searchPool.find(c => isSimilarEnough(name, c.name ?? ""));
+        if (similar) { console.log(`[lookup] Similar: "${similar.name}"`); return similar; }
+
+        // If domain specified and pool has results, return best guess
+        if (domain && pool.length > 0) {
+          console.log(`[lookup] Domain fallback: "${pool[0].name}"`);
+          return pool[0];
+        }
+
+        console.log(`[lookup] No match among ${searchPool.length} results for "${name}"`);
+        break;
+      } catch (err) {
+        console.error(`[lookup] Error (attempt ${attempt}): ${err.message}`);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
       }
-
-      const searchPool = pool.length > 0 ? pool : cards;
-
-      // Exact name match first
-      const exact = searchPool.find(c => c.name?.toLowerCase() === name.toLowerCase());
-      if (exact) { console.log(`[lookup] Exact: "${exact.name}"`); return exact; }
-
-      // Similarity match
-      const similar = searchPool.find(c => isSimilarEnough(name, c.name ?? ""));
-      if (similar) { console.log(`[lookup] Similar: "${similar.name}"`); return similar; }
-
-      // If domain specified and pool has results, return best guess
-      if (domain && pool.length > 0) {
-        console.log(`[lookup] Domain fallback: "${pool[0].name}"`);
-        return pool[0];
-      }
-
-      console.log(`[lookup] No match among ${searchPool.length} results for "${name}"`);
-    } catch (err) {
-      console.error(`[lookup] Error: ${err.message}`);
     }
   }
 
