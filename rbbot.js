@@ -8,7 +8,7 @@ const fetch = require("node-fetch");
 // ─── Config ───────────────────────────────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN || "YOUR_BOT_TOKEN_HERE";
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || "";
-const RIFTCODEX_BASE = "https://api.riftcodex.com";
+const RIFTCODEX_BASE = "https://api.riftcodex.com/api";
 const RAPIDAPI_HOST = "riftbound-prices-api.p.rapidapi.com";
 
 const RIFTCODEX_HEADERS = {
@@ -96,9 +96,9 @@ async function lookupCard(rawQuery) {
   const fullQuery = name.replace(/[,]/g, "").replace(/\s+/g, "+");
 
   const queries = [
-    `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(firstWord)}`,
-    `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(fullQuery)}`,
-    `${RIFTCODEX_BASE}/cards/name?exact=${encodeURIComponent(fullQuery)}`,
+    `${RIFTCODEX_BASE}/cards?name=${encodeURIComponent(firstWord)}&limit=20`,
+    `${RIFTCODEX_BASE}/cards?name=${encodeURIComponent(fullQuery)}&limit=20`,
+    `${RIFTCODEX_BASE}/cards?name=${encodeURIComponent(name)}&limit=20`,
   ];
 
   for (const url of queries) {
