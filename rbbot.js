@@ -71,39 +71,75 @@ function isSimilarEnough(searchName, resultName) {
   // Need at least half the significant words to match
   return matchCount >= Math.ceil(searchWords.length / 2) && matchCount >= 2;
 }
-async function lookupCard(cardName) {
-  const name = cardName.trim();
-  const queryParam = name.replace(/[,]/g, "").replace(/\s+/g, "+");
+// ─── Colour → Domain mapping for [[Card colour]] queries ─────────────────────
+const COLOUR_TO_DOMAIN = {
+  red: "Fury", orange: "Body",
+  green: "Calm", teal: "Calm",
+  blue: "Mind",
+  purple: "Chaos",
+  yellow: "Order", gold: "Order",
+  white: "Body", grey: "Body", gray: "Body",
+};
 
-  // Use fuzzy endpoint — search is broken, fuzzy works correctly
-  // Use first word only for fuzzy to get broadest results, then filter by name
+function parseCardQuery(raw) {
+  const words = raw.trim().split(/\s+/);
+  const last = words[words.length - 1].toLowerCase();
+  if (COLOUR_TO_DOMAIN[last]) {
+    return { name: words.slice(0, -1).join(" "), domain: COLOUR_TO_DOMAIN[last] };
+  }
+  return { name: raw.trim(), domain: null };
+}
+
+async function lookupCard(rawQuery) {
+  const { name, domain } = parseCardQuery(rawQuery);
   const firstWord = name.split(/[\s,]/)[0];
-  try {
-    const url = `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(firstWord)}`;
-    console.log(`[fuzzy] GET ${url}`);
-    const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
-    const json = await res.json();
-    console.log(`[fuzzy] Response: ${JSON.stringify(json).slice(0, 400)}`);
-    const cards = json.items ?? json.data ?? (Array.isArray(json) ? json : null);
-    if (cards && cards.length > 0) {
-      // Prefer exact name match first
-      const exactMatch = cards.find(c =>
-        c.name?.toLowerCase() === name.toLowerCase()
-      );
-      if (exactMatch) {
-        console.log(`[fuzzy] Exact match: "${exactMatch.name}"`);
-        return exactMatch;
+  const fullQuery = name.replace(/[,]/g, "").replace(/\s+/g, "+");
+
+  const queries = [
+    `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(firstWord)}`,
+    `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(fullQuery)}`,
+    `${RIFTCODEX_BASE}/cards/name?exact=${encodeURIComponent(fullQuery)}`,
+  ];
+
+  for (const url of queries) {
+    try {
+      console.log(`[lookup] GET ${url}`);
+      const res = await fetch(url, { headers: RIFTCODEX_HEADERS });
+      const json = await res.json();
+      console.log(`[lookup] Response: ${JSON.stringify(json).slice(0, 300)}`);
+      const cards = json.items ?? json.data ?? (Array.isArray(json) ? json : null);
+      if (!cards || cards.length === 0) continue;
+
+      // Filter by domain if a colour was specified
+      const pool = domain
+        ? cards.filter(c => (c.classification?.domain ?? []).includes(domain))
+        : cards;
+
+      if (domain && pool.length === 0) {
+        console.log(`[lookup] No cards in domain "${domain}" among ${cards.length} results`);
+        continue;
       }
-      // Fall back to similarity check
-      const similarMatch = cards.find(c => isSimilarEnough(name, c.name ?? ""));
-      if (similarMatch) {
-        console.log(`[fuzzy] Similar match: "${similarMatch.name}"`);
-        return similarMatch;
+
+      const searchPool = pool.length > 0 ? pool : cards;
+
+      // Exact name match first
+      const exact = searchPool.find(c => c.name?.toLowerCase() === name.toLowerCase());
+      if (exact) { console.log(`[lookup] Exact: "${exact.name}"`); return exact; }
+
+      // Similarity match
+      const similar = searchPool.find(c => isSimilarEnough(name, c.name ?? ""));
+      if (similar) { console.log(`[lookup] Similar: "${similar.name}"`); return similar; }
+
+      // If domain specified and pool has results, return best guess
+      if (domain && pool.length > 0) {
+        console.log(`[lookup] Domain fallback: "${pool[0].name}"`);
+        return pool[0];
       }
-      console.log(`[fuzzy] No match among ${cards.length} results for "${name}"`);
+
+      console.log(`[lookup] No match among ${searchPool.length} results for "${name}"`);
+    } catch (err) {
+      console.error(`[lookup] Error: ${err.message}`);
     }
-  } catch (err) {
-    console.error("[fuzzy] Error:", err.message);
   }
 
   return null;
@@ -567,7 +603,6 @@ bot.on("message", async (msg) => {
   for (const name of cardNames.slice(0, 5)) {
     try {
       const card = await lookupCard(name);
-
       if (!card) {
         await bot.sendMessage(chatId,
           `❌ Card not found: *${esc(name)}*\nCheck the spelling and try again`,
