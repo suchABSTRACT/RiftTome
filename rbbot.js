@@ -71,7 +71,18 @@ function isSimilarEnough(searchName, resultName) {
   // Need at least half the significant words to match
   return matchCount >= Math.ceil(searchWords.length / 2) && matchCount >= 2;
 }
-// ─── Colour → Domain mapping for [[Card colour]] queries ─────────────────────
+// ─── Art shortcode → metadata filter ─────────────────────────────────────────
+const ART_FILTERS = {
+  base:  c => !c.metadata?.alternate_art && !c.metadata?.overnumbered && !c.metadata?.signature && !c.name?.includes("(Metal)") && c.classification?.rarity !== "Promo",
+  aa:    c => c.metadata?.alternate_art === true,
+  on:    c => c.metadata?.overnumbered === true && !c.metadata?.signature,
+  sig:   c => c.metadata?.signature === true && !c.metadata?.overnumbered,
+  son:   c => c.metadata?.overnumbered === true && c.metadata?.signature === true,
+  metal: c => c.name?.includes("(Metal)"),
+  promo: c => c.classification?.rarity === "Promo",
+};
+
+// ─── Colour → Domain mapping ──────────────────────────────────────────────────
 const COLOUR_TO_DOMAIN = {
   red: "Fury", orange: "Body",
   green: "Calm", teal: "Calm",
@@ -81,19 +92,64 @@ const COLOUR_TO_DOMAIN = {
   white: "Body", grey: "Body", gray: "Body",
 };
 
+// Parse [[card name c:colour a:art]] format
 function parseCardQuery(raw) {
-  const words = raw.trim().split(/\s+/);
-  const last = words[words.length - 1].toLowerCase();
-  if (COLOUR_TO_DOMAIN[last]) {
-    return { name: words.slice(0, -1).join(" "), domain: COLOUR_TO_DOMAIN[last] };
+  let name = raw.trim();
+  let domain = null;
+  let artFilter = null;
+
+  // Extract c:colour
+  const colourMatch = name.match(/\bc:(\w+)/i);
+  if (colourMatch) {
+    domain = COLOUR_TO_DOMAIN[colourMatch[1].toLowerCase()] ?? null;
+    name = name.replace(colourMatch[0], "").trim();
   }
-  return { name: raw.trim(), domain: null };
+
+  // Extract a:art
+  const artMatch = name.match(/\ba:(\w+)/i);
+  if (artMatch) {
+    artFilter = ART_FILTERS[artMatch[1].toLowerCase()] ?? null;
+    name = name.replace(artMatch[0], "").trim();
+  }
+
+  // Also support old plain colour word at end e.g. [[Kennen yellow]]
+  if (!domain) {
+    const words = name.split(/\s+/);
+    const last = words[words.length - 1].toLowerCase();
+    if (COLOUR_TO_DOMAIN[last]) {
+      domain = COLOUR_TO_DOMAIN[last];
+      name = words.slice(0, -1).join(" ");
+    }
+  }
+
+  return { name: name.trim(), domain, artFilter };
+}
+
+// ─── Card lookup cache (reduces Riftcodex API calls) ─────────────────────────
+const cardCache = new Map();
+const CARD_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function getCachedCard(key) {
+  const entry = cardCache.get(key.toLowerCase());
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > CARD_CACHE_TTL) { cardCache.delete(key.toLowerCase()); return null; }
+  return entry.card;
+}
+
+function setCachedCard(key, card) {
+  cardCache.set(key.toLowerCase(), { card, fetchedAt: Date.now() });
+  if (cardCache.size > 500) cardCache.delete(cardCache.keys().next().value);
 }
 
 async function lookupCard(rawQuery) {
-  const { name, domain } = parseCardQuery(rawQuery);
+  const { name, domain, artFilter } = parseCardQuery(rawQuery);
   const firstWord = name.split(/[\s,]/)[0];
   const fullQuery = name.replace(/[,]/g, "").replace(/\s+/g, "+");
+
+  // Check cache first
+  const cacheKey = `${name}:${domain ?? ""}:${artFilter?.toString().slice(0, 20) ?? ""}`;
+  const cached = getCachedCard(cacheKey);
+  if (cached) { console.log(`[lookup] Cache hit: "${cached.name}"`); return cached; }
 
   const queries = [
     `${RIFTCODEX_BASE}/cards/name?fuzzy=${encodeURIComponent(firstWord)}`,
@@ -123,9 +179,16 @@ async function lookupCard(rawQuery) {
         if (!cards || cards.length === 0) break; // No results, try next URL
 
         // Filter by domain if a colour was specified
-        const pool = domain
+        let pool = domain
           ? cards.filter(c => (c.classification?.domain ?? []).includes(domain))
           : cards;
+
+        // Filter by art type if specified
+        if (artFilter) {
+          const artPool = pool.filter(artFilter);
+          if (artPool.length > 0) pool = artPool;
+          else console.log(`[lookup] No cards matching art filter, ignoring art filter`);
+        }
 
         if (domain && pool.length === 0) {
           console.log(`[lookup] No cards in domain "${domain}" among ${cards.length} results`);
@@ -136,15 +199,16 @@ async function lookupCard(rawQuery) {
 
         // Exact name match first
         const exact = searchPool.find(c => c.name?.toLowerCase() === name.toLowerCase());
-        if (exact) { console.log(`[lookup] Exact: "${exact.name}"`); return exact; }
+        if (exact) { console.log(`[lookup] Exact: "${exact.name}"`); setCachedCard(cacheKey, exact); return exact; }
 
         // Similarity match
         const similar = searchPool.find(c => isSimilarEnough(name, c.name ?? ""));
-        if (similar) { console.log(`[lookup] Similar: "${similar.name}"`); return similar; }
+        if (similar) { console.log(`[lookup] Similar: "${similar.name}"`); setCachedCard(cacheKey, similar); return similar; }
 
         // If domain specified and pool has results, return best guess
         if (domain && pool.length > 0) {
           console.log(`[lookup] Domain fallback: "${pool[0].name}"`);
+          setCachedCard(cacheKey, pool[0]);
           return pool[0];
         }
 
@@ -594,6 +658,58 @@ function extractCardNames(text) {
   const matches = [...text.matchAll(/\[\[(.+?)\]\]/g)];
   return matches.map((m) => m[1].trim()).filter(Boolean);
 }
+
+// ─── Help Text ────────────────────────────────────────────────────────────────
+const HELP_TEXT = [
+  "*🃏 RiftTome Card Bot — How to Use*",
+  "",
+  "*Basic lookup:*",
+  "`\\[\\[Card Name\\]\\]`",
+  "Example: `\\[\\[Irelia, Fervent\\]\\]`",
+  "",
+  "*Multiple cards:*",
+  "`\\[\\[Irelia, Fervent\\]\\] \\[\\[Tianna Crownguard\\]\\]`",
+  "",
+  "*Filter by colour* \\(for champions with multiple versions\\)*:*",
+  "`\\[\\[Card Name c:colour\\]\\]`",
+  "",
+  "🔴 `red` → Fury",
+  "🟢 `green` → Calm",
+  "🔵 `blue` → Mind",
+  "🟣 `purple` → Chaos",
+  "🟡 `yellow` → Order",
+  "🟠 `orange` → Body",
+  "",
+  "Example: `\\[\\[Kennen c:yellow\\]\\]` → Keeper of Balance",
+  "Example: `\\[\\[Kennen c:purple\\]\\]` → Storm of Shuriken",
+  "",
+  "*Filter by art type:*",
+  "`\\[\\[Card Name a:art\\]\\]`",
+  "",
+  "`base` → Base art",
+  "`aa` → Alternate Art",
+  "`on` → Overnumbered",
+  "`sig` → Signature",
+  "`son` → Signature Overnumbered",
+  "`metal` → Metal promo",
+  "`promo` → Organised Play promo",
+  "",
+  "Example: `\\[\\[Kai'Sa a:on\\]\\]` → Overnumbered",
+  "",
+  "*Combine both filters:*",
+  "`\\[\\[Kennen c:yellow a:aa\\]\\]` → Keeper of Balance \\(Alternate Art\\)",
+  "",
+  "*Commands:*",
+  "`/rbhelp` — show this message",
+].join("\n");
+
+// ─── Help Command Handler ─────────────────────────────────────────────────────
+bot.onText(/\/rbhelp/, (msg) => {
+  bot.sendMessage(msg.chat.id, HELP_TEXT, {
+    parse_mode: "MarkdownV2",
+    reply_to_message_id: msg.message_id,
+  }).catch(err => console.error("[rbhelp] Error:", err.message));
+});
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
 bot.on("message", async (msg) => {
