@@ -112,6 +112,8 @@ function parseCardQuery(raw) {
     name = name.replace(artMatch[0], "").trim();
   }
 
+  console.log(`[parse] raw="${raw}" → name="${name}" domain=${domain} artFilter=${artFilter ? artMatch[1] : null}`);
+
   // Also support old plain colour word at end e.g. [[Kennen yellow]]
   if (!domain) {
     const words = name.split(/\s+/);
