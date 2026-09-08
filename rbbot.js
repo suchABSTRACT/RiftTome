@@ -92,11 +92,12 @@ const COLOUR_TO_DOMAIN = {
   white: "Body", grey: "Body", gray: "Body",
 };
 
-// Parse [[card name c:colour a:art]] format
+// Parse [[card name c:colour a:art t:type]] format
 function parseCardQuery(raw) {
   let name = raw.trim();
   let domain = null;
   let artFilter = null;
+  let typeFilter = null;
 
   // Extract c:colour
   const colourMatch = name.match(/\bc:(\w+)/i);
@@ -112,7 +113,16 @@ function parseCardQuery(raw) {
     name = name.replace(artMatch[0], "").trim();
   }
 
-  console.log(`[parse] raw="${raw}" → name="${name}" domain=${domain} artFilter=${artFilter ? artMatch[1] : null}`);
+  // Extract t:type (legend or nonlegend)
+  const typeMatch = name.match(/\bt:(\w+)/i);
+  if (typeMatch) {
+    const t = typeMatch[1].toLowerCase();
+    if (t === "legend") typeFilter = c => c.classification?.type === "Legend";
+    else if (t === "nonlegend" || t === "non") typeFilter = c => c.classification?.type !== "Legend";
+    name = name.replace(typeMatch[0], "").trim();
+  }
+
+  console.log(`[parse] raw="${raw}" → name="${name}" domain=${domain} art=${artMatch?.[1] ?? null} type=${typeMatch?.[1] ?? null}`);
 
   // Also support old plain colour word at end e.g. [[Kennen yellow]]
   if (!domain) {
@@ -124,7 +134,7 @@ function parseCardQuery(raw) {
     }
   }
 
-  return { name: name.trim(), domain, artFilter };
+  return { name: name.trim(), domain, artFilter, typeFilter };
 }
 
 // ─── Card lookup cache (reduces Riftcodex API calls) ─────────────────────────
@@ -144,12 +154,12 @@ function setCachedCard(key, card) {
 }
 
 async function lookupCard(rawQuery) {
-  const { name, domain, artFilter } = parseCardQuery(rawQuery);
+  const { name, domain, artFilter, typeFilter } = parseCardQuery(rawQuery);
   const firstWord = name.split(/[\s,]/)[0];
   const fullQuery = name.replace(/[,]/g, "").replace(/\s+/g, "+");
 
   // Check cache first
-  const cacheKey = `${name}:${domain ?? ""}:${artFilter?.toString().slice(0, 20) ?? ""}`;
+  const cacheKey = `${name}:${domain ?? ""}:${artFilter?.toString().slice(0, 20) ?? ""}:${typeFilter?.toString().slice(0, 20) ?? ""}`;
   const cached = getCachedCard(cacheKey);
   if (cached) { console.log(`[lookup] Cache hit: "${cached.name}"`); return cached; }
 
@@ -189,7 +199,14 @@ async function lookupCard(rawQuery) {
         if (artFilter) {
           const artPool = pool.filter(artFilter);
           if (artPool.length > 0) pool = artPool;
-          else console.log(`[lookup] No cards matching art filter, ignoring art filter`);
+          else console.log(`[lookup] No cards matching art filter, ignoring`);
+        }
+
+        // Filter by type (legend/non-legend) if specified
+        if (typeFilter) {
+          const typePool = pool.filter(typeFilter);
+          if (typePool.length > 0) pool = typePool;
+          else console.log(`[lookup] No cards matching type filter, ignoring`);
         }
 
         if (domain && pool.length === 0) {
@@ -657,22 +674,36 @@ function findErrata(errata, cardName) {
 
 
 function extractCardNames(text) {
-  const matches = [...text.matchAll(/\[\[(.+?)\]\]/g)];
-  return matches.map((m) => m[1].trim()).filter(Boolean);
+  const results = [];
+
+  // {{Card Name}} → legend
+  for (const m of text.matchAll(/\{\{(.+?)\}\}/g)) {
+    results.push({ raw: m[1].trim(), forceLegend: true });
+  }
+
+  // [[Card Name]] → non-legend
+  for (const m of text.matchAll(/\[\[(.+?)\]\]/g)) {
+    results.push({ raw: m[1].trim(), forceLegend: false });
+  }
+
+  return results;
 }
 
 // ─── Help Text ────────────────────────────────────────────────────────────────
 const HELP_TEXT = [
-  "*🃏 RiftTome Card Bot — How to Use*",
+  "*📖 RiftTome — How to Use*",
   "",
-  "*Basic lookup:*",
-  "`\\[\\[Card Name\\]\\]`",
-  "Example: `\\[\\[Irelia, Fervent\\]\\]`",
+  "*Basic card lookup:*",
+  "`\\[\\[Card Name\\]\\]` → Units, Spells, Gears, Champions",
+  "`\\{\\{Card Name\\}\\}` → Legend cards",
   "",
-  "*Multiple cards:*",
+  "Example: `\\[\\[Kai'Sa\\]\\]` → Kai'Sa \\(non\\-legend\\)",
+  "Example: `\\{\\{Kai'Sa\\}\\}` → Kai'Sa, Daughter of the Void \\(legend\\)",
+  "",
+  "*Multiple cards in one message:*",
   "`\\[\\[Irelia, Fervent\\]\\] \\[\\[Tianna Crownguard\\]\\]`",
   "",
-  "*Filter by colour* \\(for champions with multiple versions\\)*:*",
+  "*Filter by colour* \\(champions with multiple domain versions\\)*:*",
   "`\\[\\[Card Name c:colour\\]\\]`",
   "",
   "🔴 `red` → Fury",
@@ -698,19 +729,20 @@ const HELP_TEXT = [
   "",
   "Example: `\\[\\[Kai'Sa a:on\\]\\]` → Overnumbered",
   "",
-  "*Combine both filters:*",
+  "*Combine filters:*",
   "`\\[\\[Kennen c:yellow a:aa\\]\\]` → Keeper of Balance \\(Alternate Art\\)",
+  "`\\[\\[Kai'Sa c:red a:on\\]\\]` → Survivor \\(Overnumbered\\)",
   "",
   "*Commands:*",
-  "`/rbhelp` — show this message",
+  "`/rthelp` — show this message",
 ].join("\n");
 
 // ─── Help Command Handler ─────────────────────────────────────────────────────
-bot.onText(/\/rbhelp/, (msg) => {
+bot.onText(/\/rthelp/, (msg) => {
   bot.sendMessage(msg.chat.id, HELP_TEXT, {
     parse_mode: "MarkdownV2",
     reply_to_message_id: msg.message_id,
-  }).catch(err => console.error("[rbhelp] Error:", err.message));
+  }).catch(err => console.error("[rthelp] Error:", err.message));
 });
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
@@ -718,27 +750,33 @@ bot.on("message", async (msg) => {
   const text = msg.text ?? "";
   const chatId = msg.chat.id;
 
-  const isCommand = text.startsWith("/rbbot");
-  const hasBrackets = /\[\[.+?\]\]/.test(text);
+  const isCommand = text.startsWith("/rtbot");
+  const hasBrackets = /\[\[.+?\]\]|\{\{.+?\}\}/.test(text);
   if (!isCommand && !hasBrackets) return;
 
-  const cardNames = extractCardNames(text);
-  if (cardNames.length === 0) {
+  const cardQueries = extractCardNames(text);
+  if (cardQueries.length === 0) {
     if (isCommand) {
       bot.sendMessage(chatId,
-        "Usage: `[[Card Name]]` or `/rbbot [[Card Name]]`\nExample: `[[Irelia, Fervent]]`",
+        "Usage: `\\[\\[Card Name\\]\\]` or `\\{\\{Card Name\\}\\}` for legends\nType `/rthelp` for full guide",
         { parse_mode: "MarkdownV2", reply_to_message_id: msg.message_id }
       );
     }
     return;
   }
 
-  for (const name of cardNames.slice(0, 5)) {
+  for (const { raw, forceLegend } of cardQueries.slice(0, 5)) {
+    // Inject t:legend or t:nonlegend based on bracket type, unless user already specified t:
+    let query = raw;
+    if (!raw.match(/\bt:\w+/i)) {
+      query = forceLegend ? `${raw} t:legend` : `${raw} t:nonlegend`;
+    }
+
     try {
-      const card = await lookupCard(name);
+      const card = await lookupCard(query);
       if (!card) {
         await bot.sendMessage(chatId,
-          `❌ Card not found: *${esc(name)}*\nCheck the spelling and try again`,
+          `❌ Card not found: *${esc(raw)}*\nCheck the spelling and try again`,
           { parse_mode: "MarkdownV2", reply_to_message_id: msg.message_id }
         ).catch(() => {});
         continue;
@@ -767,18 +805,17 @@ bot.on("message", async (msg) => {
           });
         }
       } catch (sendErr) {
-        console.error(`[send_error] "${name}": ${sendErr.message}`);
+        console.error(`[send_error] "${raw}": ${sendErr.message}`);
         console.error(`[caption_dump] ${caption}`);
-        // Fallback: send as plain text so user still gets something
         await bot.sendMessage(chatId,
           `Found: ${esc(card.name)} — but had a formatting error displaying it`,
           { parse_mode: "MarkdownV2", reply_to_message_id: msg.message_id }
         ).catch(() => {});
       }
     } catch (err) {
-      console.error(`Error looking up "${name}":`, err.message);
+      console.error(`Error looking up "${raw}":`, err.message);
       await bot.sendMessage(chatId,
-        `⚠️ Error fetching *${esc(name)}* — try again later`,
+        `⚠️ Error fetching *${esc(raw)}* — try again later`,
         { parse_mode: "MarkdownV2", reply_to_message_id: msg.message_id }
       ).catch(() => {});
     }
@@ -797,7 +834,7 @@ http.createServer((req, res) => {
   res.writeHead(200);
   res.end("RBBot is running!");
 }).listen(PORT, () => {
-  console.log(`✅ RBBot is running on port ${PORT}. Listening for [[card lookups]]...`);
+  console.log(`✅ RiftTome is running on port ${PORT}. Listening for card lookups...`);
 });
 
 // ─── Keep-alive ping (prevents Render free tier from sleeping) ────────────────
