@@ -226,82 +226,9 @@ function buildCaption(variant, errata) {
   return caption;
 }
 
-// ─── Errata Data ──────────────────────────────────────────────────────────────
-const ERRATA_DATA = {
-  "ava achiever": { old: "When I attack, you may pay [C] to play a card with [Hidden] from your hand here, ignoring its cost.", new: "When I attack, you may pay [C] to play a card with [Hidden] from your hand, ignoring its cost. If it's a unit, play it here." },
-  "baited hook": { old: "[1][C], [E]: Kill a friendly unit. Look at the top 5 cards of your Main Deck. You may play a unit from among them that has the same name as the killed unit, ignoring its cost. Recycle the rest.", new: "[1][C], [E]: Kill a friendly unit. Look at the top 5 cards of your Main Deck. You may banish a unit from among them that has the same name as the killed unit, then play it, ignoring its cost. Recycle the rest." },
-  "blind fury": { old: "[Action] (Play on your turn or in showdowns.)\nEach opponent reveals the top card of their Main Deck. Choose one and play it, ignoring its cost.", new: "[Action] (Play on your turn or in showdowns.)\nEach opponent reveals the top card of their Main Deck. Choose one and banish it, then play it, ignoring its cost." },
-  "clockwork keeper": { old: "As you play me, you may pay [C] as an additional cost. If you do, draw 1.", new: "You may pay [C] as an additional cost to play me.\nWhen you play me, if you paid the additional cost, draw 1." },
-  "convergent mutation": { old: "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. Increase its Might until it equals the Might of the strongest enemy unit here.", new: "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. This turn, increase its Might until it equals the Might of the strongest enemy unit here." },
-  "dark child - starter": { old: "At the end of your turn, ready 2 runes.", new: "At the end of your turn, ready up to 2 runes." },
-  "dazzling aurora": { old: "At the end of your turn, reveal cards from the top of your Main Deck until you reveal a unit. Play it, ignoring its cost. Recycle the rest.", new: "At the end of your turn, reveal cards from the top of your Main Deck until you reveal a unit and banish it. Play it, ignoring its cost. Recycle the rest." },
-  "disintegrate": { old: "[Action] (Play on your turn or in showdowns.)\nDeal 3 to a unit at a battlefield. If this kills it, draw 1.", new: "Action (Play on your turn or in showdowns.)\nDeal 3 to a unit at a battlefield. If this kills it, do this: draw 1." },
-  "dragon's rage": { old: "Move an enemy unit. Then choose another enemy unit at its destination. They deal damage equal to their Mights to each other.", new: "Move an enemy unit. Then do this: Choose another enemy unit at its destination. They deal damage equal to their Mights to each other." },
-  "dune drake": { old: "When I attack, give me +2 [M] if there is a ready enemy unit here.", new: "When I attack, give me +2 [M] this turn if there is a ready enemy unit here." },
-  "highlander": { old: "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. The next time it dies this turn, recall it instead.", new: "[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a friendly unit. The next time it would die this turn, recall it instead." },
-  "karma, channeler": { old: "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)\nWhen you recycle one or more cards, draw 1. (Limit once per turn.)", new: "[Vision] (When you play me, look at the top card of your Main Deck. You may recycle it.)\nWhen you recycle one or more cards, do this: draw 1. (Limit once per turn.)" },
-  "kinkou monk": { old: "When you play me, buff two other friendly units. (Each one that doesn't have a buff gets a +1 [M] buff.)", new: "When you play me, buff up to two other friendly units. (Each one that doesn't have a buff gets a +1 [M] buff.)" },
-  "nocturne, horrifying": { old: "[Ganking] (I can move from battlefield to battlefield.)\nWhen you look at cards from the top of your deck (and don't draw them), you may banish me from among them and play me.", new: "[Ganking] (I can move from battlefield to battlefield.)\nAs you look at or reveal me from the top of your deck, you may banish me, then play me." },
-  "pack of wonders": { old: "[E]: Return another friendly gear, unit, or [Hidden] card to its owner's hand.", new: "[E]: Return another friendly gear, unit, or facedown card to its owner's hand." },
-  "portal rescue": { old: "[Action] (Play on your turn or in showdowns.)\nBanish a friendly unit, then play it to base, ignoring its cost.", new: "[Action] (Play on your turn or in showdowns.)\nBanish a friendly unit, then its owner plays it to their base, ignoring its cost." },
-  "promising future": { old: "Each player looks at the top 5 cards of their Main Deck, chooses one, then recycles the rest. Starting with the next player, each player plays the chosen card, ignoring its cost.", new: "Each player looks at the top 5 cards of their Main Deck, banishes one of them, then recycles the rest. Starting with the next player, each player plays the banished card, ignoring its cost." },
-  "ravenborn tome": { old: "[E]: The next spell you play deals 1 Bonus Damage. (Each instance of damage the spell deals is increased by 1.)", new: "[E]: The next spell you play this turn deals 1 Bonus Damage. (Each instance of damage the spell deals is increased by 1.)" },
-  "salvage": { old: "[Action] (Play on your turn or in showdowns.)\nYou may kill a gear. Draw 1.", new: "[Action] (Play on your turn or in showdowns.)\nYou may kill up to one gear. Draw 1." },
-  "sigil of the storm": { old: "When you conquer here, you must recycle one of your runes. (This doesn't choose anything.)", new: "When you conquer here, you must recycle one of your runes. (This doesn't choose anything.) [Functional errata — rules clarification applied]" },
-  "sona, harmonious": { old: "While I'm at a battlefield, ready 4 friendly runes at the end of your turn.", new: "At the end of your turn, if I'm at a battlefield, ready up to 4 friendly runes." },
-  "targon's peak": { old: "When you conquer here, ready 2 runes at the end of this turn.", new: "When you conquer here, ready up to 2 runes at the end of this turn." },
-  "teemo, strategist": { old: "[Hidden] (Hide now for [A] to react with later for [0].)\nWhen I defend or I'm played from [Hidden], reveal the top 5 cards of your Main Deck. You may play a unit from among them, ignoring its cost. Recycle the rest.", new: "[Hidden] (Hide now for [A] to react with later for [0].)\nWhen I defend, choose an enemy unit here and reveal the top 5 cards of your Main Deck. You may banish a unit from among them, then play it here, ignoring its cost. Recycle the rest." },
-  "the boss": { old: "When a buffed unit you control would die, you may pay [C] and exhaust me to spend its buff and recall it exhausted instead.", new: "If a buffed unit you control would die, you may pay [C], exhaust me, and spend its buff to heal it, exhaust it, and recall it instead." },
-  "the dreaming tree": { old: "The first time you choose a friendly unit with a spell here each turn, draw 1.", new: "When a player chooses a friendly unit here with a spell for the first time each turn, they draw 1." },
-  "the syren": { old: "[1], [E]: Move a friendly unit at a battlefield to your base.", new: "[1], [E]: Move a friendly unit at a battlefield to its base." },
-  "tideturner": { old: "[Hidden] (Hide now for [A] to react with later for [0].)\nWhen you play me, you may choose a friendly unit. Move me to its battlefield.", new: "[Hidden] (Hide now for [A] to react with later for [0].)\nWhen you play me, you may choose a unit you control at another battlefield. Move me there." },
-  "unforgiven": { old: "[2], [E]: Move a friendly unit to or from your base.", new: "[2], [E]: Move a friendly unit to or from its base." },
-  "unlicensed armory": { old: "Discard 1, [E]: Choose a friendly unit. The next time it dies this turn, you may pay [C] to recall it exhausted instead.", new: "Discard 1, [E]: Choose a friendly unit. The next time it would die this turn, you may pay [C] to heal it, exhaust it, and recall it instead." },
-  "void gate": { old: "Spells and abilities affecting units here each deal 1 Bonus Damage. (Each instance of damage the spell deals is increased by 1.)", new: "Spells and abilities deal 1 Bonus Damage to units here. (Each instance of damage the spell deals to a unit here is increased by 1.)" },
-  "zhonya's hourglass": { old: "[Hidden] (Hide now for [A] to react with later for [0].)\nThe next time a friendly unit would die, kill this instead. Recall that unit.", new: "[Hidden] (Hide now for [A] to react with later for [0].)\nIf a friendly unit would die, kill this instead. Heal that unit and recall it." },
-  "falling star": { old: "Do this twice:\nDeal 3 to a unit. (You can choose different units.)", new: "Deal 3 to a unit.\nDeal 3 to a unit." },
-  "icathian rain": { old: "Do this 6 times:\nDeal 2 to a unit. (You can choose different units.)", new: "Deal 2 to a unit.\nDeal 2 to a unit.\nDeal 2 to a unit.\nDeal 2 to a unit.\nDeal 2 to a unit.\nDeal 2 to a unit." },
-  "reinforce": { old: "Look at the top 5 cards of your Main Deck. You may play a unit from among them. Its Energy cost is reduced by [5]. Then recycle the rest.", new: "Look at the top 5 cards of your Main Deck. You may banish a unit from among them, then play it, reducing its cost by [5]. Recycle the rest." },
-  "arise!": { old: "Play a 2 [M] Sand Soldier unit token for each Equipment you control. Then ready two of them.", new: "Play a 2 [M] Sand Soldier unit token for each Equipment you control. Then do this: Ready up to two of them." },
-  "blood rush": { old: "[Action] (Play on your turn or in showdowns.)\n[Repeat] [1]\nGive a friendly unit +2 [M] this turn.", new: "[Action] (Play on your turn or in showdowns.)\n[Repeat] [1]\nGive a friendly unit +2 [M] this turn. [Functional errata — see riftwatcher.com]" },
-  "deathgrip": { old: "[Reaction]\nKill a friendly unit to give +[M] equal to its Might to another friendly unit this turn.", new: "[Reaction]\nKill a friendly unit. If you do, give +[M] equal to its Might to another friendly unit this turn." },
-  "edge of night": { old: "[Hidden]\nWhen you play this from face down, attach it to a unit you control.", new: "[Hidden]\nWhen you play this from face down, attach it to a unit you control. [Functional errata — see riftwatcher.com]" },
-  "janna, savior": { old: "[Reaction]\nWhen you play me, choose a friendly unit here. Move it to another battlefield.", new: "[Reaction]\nWhen you play me, choose a friendly unit here. Move it to another battlefield. [Functional errata — see riftwatcher.com]" },
-  "jax, unmatched": { old: "[Deflect]\nEach Equipment in your hand has [Quick-Draw].", new: "[Deflect]\nYour Equipment everywhere have [Quick-Draw]." },
-  "kato the arm": { old: "[Deflect]\nWhen I move to a battlefield, give a friendly unit here +2 [M] this turn.", new: "[Deflect]\nWhen I move to a battlefield, give another friendly unit here +2 [M] this turn." },
-  "rek'sai, swarm queen": { old: "When I attack, you may reveal the top 2 cards of your Main Deck. You may play one. Then recycle the rest. If the played card is a unit, it enters ready.", new: "When I attack, you may reveal the top 2 cards of your Main Deck. You may banish one, then play it. If it is a unit, you may have it enter ready. Recycle the rest." },
-  "rell, magnetic": { old: "[Tank]\nWhen I attack, you may play an Equipment with Energy cost no more than [2] from your hand for free.", new: "[Tank]\nWhen I attack, you may play an Equipment with Energy cost no more than [2] from your hand, ignoring its cost." },
-  "tianna crownguard": { old: "[Deflect]\nWhile I'm at a battlefield, opponents can't score or gain Power.", new: "[Deflect]\nWhile I'm at a battlefield, opponents can't gain Power." },
-  "void burrower": { old: "When you conquer, you may exhaust me to reveal the top 2 cards of your Main Deck. You may play one. Then recycle the rest.", new: "When you conquer, you may exhaust me to reveal the top 2 cards of your Main Deck. You may banish one, then play it. Recycle the rest." },
-  "void rush": { old: "Reveal the top 2 cards of your Main Deck. You may play one of them, reducing its cost by [2]. Draw any you did not play.", new: "Reveal the top 2 cards of your Main Deck. You may banish one, then play it, reducing its cost by [2]. Draw any you didn't banish." },
-  "yone, blademaster": { old: "[Weaponmaster] [Functional errata — see riftwatcher.com]", new: "[Weaponmaster] [Functional errata — see riftwatcher.com]" },
-  "guards!": { old: "Play a 2 [M] Sand Soldier unit token. You may pay [C] to ready it.", new: "Play a 2 [M] Sand Soldier unit token. Then do this: You may pay [C] to ready it." },
-  "relentless pursuit": { old: "Move a friendly unit. You may attach an Equipment with the same controller to it.", new: "Move a friendly unit. You may attach up to one Equipment with the same controller to it." },
-  "draven, vanquisher": { old: "When I win a combat, play a Gold gear token exhausted.\nWhen I attack or defend, you may pay [F]. If you do, give me +2 [M] this turn.", new: "When I win a combat, play a Gold gear token exhausted.\nWhen I attack or defend, you may pay [F] to give me +2 [M] this turn." },
-  "emperor's dais": { old: "When you conquer here, you may pay [1] and return a unit you control here to its owner's hand. If you do, play a 2 [M] Sand Soldier unit token here.", new: "When you conquer here, you may pay [1] and return a unit you control here to its owner's hand to play a 2 [M] Sand Soldier unit token here." },
-  "fizz, trickster": { old: "When you play me, you may play a spell from your trash with Energy cost no more than [3], ignoring its Energy cost. Recycle it.", new: "When you play me, you may play a spell from your trash with Energy cost no more than [3], ignoring its Energy cost. Then recycle it." },
-  "death from below": { old: "Kill a unit at a battlefield. Then, if it had 3 [M] or less, you may play this from trash for [A].", new: "Kill a unit at a battlefield. Then, if it had 3 [M] or less, do this: You may play this from trash for [A]." },
-  "bone skewer": { old: "When they do, [Stun] it.", new: "If they do, then do this: [Stun] it." },
-  "deceiver": { old: "Play a ready Reflection unit token there. It becomes a copy of another unit there.", new: "Play a ready Reflection unit token there. Then do this: It becomes a copy of another unit there." },
-  "mirror image": { old: "Play a ready Reflection unit token to your base. It becomes a copy of that unit.", new: "Play a ready Reflection unit token to your base. Then do this: It becomes a copy of that unit." },
-  "rengar, trophy hunter": { old: "I can be played to a battlefield where there are enemy units (even if you don't have units there).", new: "I can [Ambush] to a battlefield where there are enemy units, even if you don't have units there." },
-  "diana, lunari": { old: "When a showdown begins here, you may pay [1]. If you do, [Predict], then reveal the top card of your Main Deck. If it's a spell, you may play it here, ignoring its cost.", new: "When a showdown begins here, you may pay [1] to [Predict], then reveal the top card of your Main Deck. If it's a spell, you may play it here, ignoring its cost." },
-  "stalking wolf": { old: "[Ambush]\nAs an additional cost to play me, kill a friendly unit.", new: "[Ambush]\nAs an additional cost to play me, kill up to one friendly unit." },
-  "astral heron": { old: "When you play your first card each turn, if I'm at a battlefield, your next card costs [2][C][C] less.", new: "When you play your first card each turn, if I'm at a battlefield, the next card you play this turn costs [2][C][C] less." },
-  "gangplank, naval": { old: "If a spell or ability that chooses me would stun me, give me -[M], or return me to hand, give me +3 [M] instead.", new: "If a spell or ability that chooses me would stun me, give me -[M], or return me to hand, give me +3 [M] this turn instead." },
-  "resonating strike": { old: "[Hidden]\n[Reaction] (Play on your turn or in showdowns.)\nChoose a battlefield. Deal 1 to each unit there.", new: "[Hidden]\n[Reaction] (Play any time, even before spells and abilities resolve.)\nChoose a battlefield. Deal 1 to each unit there." },
-};
-
-function getErrata() { return ERRATA_DATA; }
-
-function findErrata(errata, cardName) {
-  if (!errata || !cardName) return null;
-  const name = cardName.toLowerCase();
-  if (errata[name]) return errata[name];
-  const baseName = name.split(" - ")[0].trim();
-  const match = Object.keys(errata).find(k => k === baseName || k.startsWith(baseName));
-  return match ? errata[match] : null;
-}
+// ─── Errata ───────────────────────────────────────────────────────────────────
+// PA already includes official errata text on cards — no manual list needed.
+function findErrata(_errata, _cardName) { return null; }
 
 // ─── Extract card queries from message ───────────────────────────────────────
 function extractCardNames(text) {
@@ -376,9 +303,8 @@ bot.on("message", async (msg) => {
         continue;
       }
 
-      const cardErrata = findErrata(getErrata(), variant.card?.name ?? "");
       const imageUrl = variant.imageUrl;
-      const caption = buildCaption(variant, cardErrata);
+      const caption = buildCaption(variant, null);
 
       try {
         if (imageUrl) {
